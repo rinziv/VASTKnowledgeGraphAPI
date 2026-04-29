@@ -10,6 +10,7 @@ A FastAPI application for uploading, storing, and analyzing NetworkX graphs.
 - Local storage of graph files
 - **Set a default graph** that can be accessed without uploading a file
 - Access graphs using the special "default" graph ID
+- **File-based workflow**: Load graphs directly from files in `graph_storage/`
 
 ## Installation
 
@@ -53,25 +54,25 @@ Upload a NetworkX graph JSON file.
 curl -X POST -F "file=@sample_graph.json" http://localhost:8000/upload/
 ```
 
-### POST /set-default/{graph_id}
+### POST /load_graph
 
-Set a graph as the default graph that can be accessed without uploading a file.
+Load a graph from a file in the graph_storage directory.
 
 **Parameters:**
-- `graph_id` (path): The unique ID of the graph to set as default
+- `filename` (required): Name of the file in graph_storage/ directory
 
 **Response:**
 ```json
 {
-  "message": "Graph set as default successfully",
-  "default_graph_id": "default",
-  "graph_id": "original-graph-id"
+  "graph_id": "unique-id-for-this-graph",
+  "message": "Graph loaded from file successfully",
+  "filename": "filename.json"
 }
 ```
 
 **Example:**
 ```bash
-curl -X POST http://localhost:8000/set-default/your-graph-id-here
+curl -X POST -H "Content-Type: application/json" -d '{"filename": "my_graph.json"}' http://localhost:8000/load_graph
 ```
 
 ### GET /summary/{graph_id}
@@ -129,26 +130,41 @@ Health check endpoint to verify the API is running.
 }
 ```
 
-## Default Graph Usage
+## File-based Workflow
 
-The default graph feature allows you to set one graph as the "default" so you can access it without uploading a file each time.
+The API supports loading graphs directly from files in the `graph_storage/` directory. This is useful when you have pre-existing graph files that you want to analyze without uploading them through the API.
 
 ### Setup Process:
 
-1. **Upload a graph** using the POST /upload/ endpoint
-2. **Set it as default** using POST /set-default/{graph_id}
-3. **Access it** using GET /summary/default
+1. **Place your graph files** in the `graph_storage/` directory
+2. **Load the graph** using the POST /load_graph endpoint
+3. **Access it** using any of the standard endpoints with the returned graph_id
 
 ### Example Workflow:
 
 ```bash
-# 1. Upload a graph
-curl -X POST -F "file=@my_graph.json" http://localhost:8000/upload/
-# Response: {"graph_id": "abc123...", "message": "Graph uploaded successfully", ...}
+# 1. Place your graph file in graph_storage/
+cp my_graph.json graph_storage/
+
+# 2. Load the graph
+curl -X POST -H "Content-Type: application/json" -d '{"filename": "my_graph.json"}' http://localhost:8000/load_graph
+# Response: {"graph_id": "abc123...", "message": "Graph loaded from file successfully", ...}
+
+# 3. Access the graph
+curl http://localhost:8000/summary/abc123...
+# Response: {graph summary...}
+```
+
+### Setting a File-based Graph as Default:
+
+```bash
+# 1. Load the graph from file
+curl -X POST -H "Content-Type: application/json" -d '{"filename": "my_graph.json"}' http://localhost:8000/load_graph
+# Response: {"graph_id": "abc123...", ...}
 
 # 2. Set it as default
 curl -X POST http://localhost:8000/set-default/abc123...
-# Response: {"message": "Graph set as default successfully", "default_graph_id": "default", ...}
+# Response: {"message": "Graph set as default successfully", ...}
 
 # 3. Access the default graph
 curl http://localhost:8000/summary/default
@@ -178,9 +194,8 @@ data = nx.node_link_data(G)  # Where G is your NetworkX graph
 .
 ├── main.py                # FastAPI application
 ├── requirements.txt       # Dependencies
-├── test_api.py            # Test script
-├── setup_default_graph.py # Script to help set up default graphs
 ├── README.md              # This file
+├── tests/                 # Test suite
 └── graph_storage/        # Directory for stored graphs (created automatically)
 ```
 
