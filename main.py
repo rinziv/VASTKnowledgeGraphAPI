@@ -241,10 +241,61 @@ async def get_graph_summary(graph_id: str):
                     key=lambda x: x[2],
                     reverse=True
                 )[:5]  # Top 5 edges by weight (if weighted)
+            },
+            "node_type_properties": {
+                "node_type_counts": {
+                    node_type: sum(1 for node in graph.nodes(data=True) if 'Node Type' in node[1] and node[1]['Node Type'] == node_type)
+                    for node_type in set(node[1].get('Node Type', 'Unknown') for node in graph.nodes(data=True))
+                }
             }
         }
 
         return JSONResponse(content=summary)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing graph: {str(e)}")
+
+
+@app.get("/node-types/{graph_id}", summary="Get node type counts by graph ID")
+async def get_node_type_counts(graph_id: str):
+    """
+    Get the count of nodes for each type in a NetworkX graph.
+
+    Args:
+        graph_id: The unique ID returned when uploading the graph, or "default" to access the default graph.
+
+    Returns:
+        A JSON object containing the count of nodes for each type.
+    """
+    # Check if graph ID exists in registry
+    if graph_id not in graph_registry:
+        raise HTTPException(status_code=404, detail="Graph ID not found")
+
+    try:
+        # Load the graph from file
+        file_path = graph_registry[graph_id]
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+
+        # Load as NetworkX graph
+        graph = nx.node_link_graph(data)
+
+        # Count nodes by type
+        node_type_counts = {}
+
+        for node in graph.nodes(data=True):
+            node_data = node[1]
+            if 'Node Type' in node_data:
+                node_type = node_data['Node Type']
+                node_type_counts[node_type] = node_type_counts.get(node_type, 0) + 1
+            else:
+                node_type_counts['Unknown'] = node_type_counts.get('Unknown', 0) + 1
+
+        return JSONResponse(content={
+            "graph_id": graph_id,
+            "node_type_counts": node_type_counts,
+            "total_nodes": graph.number_of_nodes()
+        })
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing graph: {str(e)}")
