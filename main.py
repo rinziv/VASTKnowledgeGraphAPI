@@ -242,6 +242,12 @@ async def get_graph_summary(graph_id: str):
                     reverse=True
                 )[:5]  # Top 5 edges by weight (if weighted)
             },
+            "edge_type_properties": {
+                "edge_type_counts": {
+                    edge_type: sum(1 for edge in graph.edges(data=True) if 'Edge Type' in edge[2] and edge[2]['Edge Type'] == edge_type)
+                    for edge_type in set(edge[2].get('Edge Type', 'Unknown') for edge in graph.edges(data=True))
+                }
+            },
             "node_type_properties": {
                 "node_type_counts": {
                     node_type: sum(1 for node in graph.nodes(data=True) if 'Node Type' in node[1] and node[1]['Node Type'] == node_type)
@@ -301,8 +307,49 @@ async def get_node_type_counts(graph_id: str):
         raise HTTPException(status_code=500, detail=f"Error processing graph: {str(e)}")
 
 
-@app.get("/health/", summary="Health check endpoint")
-async def health_check():
+@app.get("/edge-types/{graph_id}", summary="Get edge type counts by graph ID")
+async def get_edge_type_counts(graph_id: str):
+    """
+    Get the count of edges for each type in a NetworkX graph.
+
+    Args:
+        graph_id: The unique ID returned when uploading the graph, or "default" to access the default graph.
+
+    Returns:
+        A JSON object containing the count of edges for each type.
+    """
+    # Check if graph ID exists in registry
+    if graph_id not in graph_registry:
+        raise HTTPException(status_code=404, detail="Graph ID not found")
+
+    try:
+        # Load the graph from file
+        file_path = graph_registry[graph_id]
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+
+        # Load as NetworkX graph
+        graph = nx.node_link_graph(data)
+
+        # Count edges by type
+        edge_type_counts = {}
+
+        for edge in graph.edges(data=True):
+            edge_data = edge[2]
+            if 'Edge Type' in edge_data:
+                edge_type = edge_data['Edge Type']
+                edge_type_counts[edge_type] = edge_type_counts.get(edge_type, 0) + 1
+            else:
+                edge_type_counts['Unknown'] = edge_type_counts.get('Unknown', 0) + 1
+
+        return JSONResponse(content={
+            "graph_id": graph_id,
+            "edge_type_counts": edge_type_counts,
+            "total_edges": graph.number_of_edges()
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing graph: {str(e)}")
     """
     Health check endpoint to verify the API is running.
 
