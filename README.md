@@ -173,11 +173,12 @@ curl http://localhost:8000/summary/default
 
 ## Testing
 
-Run the test script to create a sample graph and test the API endpoints:
+Run the test scripts to create a sample graph and test the API endpoints:
 
 ```bash
-python test_api.py
+pytest
 ```
+For details, see [/tests/README.md](/tests/README.md).
 
 ## Graph Format
 
