@@ -75,30 +75,50 @@ def sample_graph_with_node_types():
 
 
 @pytest.fixture(scope="function")
-def uploaded_graph(client, sample_graph):
-    """Upload a sample graph and return the graph_id."""
-    data = nx.node_link_data(sample_graph)
+def uploaded_graph(client, sample_graph, graph_storage_dir):
+    """
+    Upload a graph created with specified data and return the graph_id.
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-        json.dump(data, f)
-        temp_file = f.name
+    Args:
+        data: a NetworkX graph in node-link format. A sample graph is used when not specified.
+    """
+    created_graphs = []
 
-    try:
-        with open(temp_file, 'rb') as f:
-            response = client.post("/upload/", files={"file": f})
+    def _upload_graph(data=None):
+        if data is None:
+            data = nx.node_link_data(sample_graph)
 
-        assert response.status_code == 201
-        graph_id = response.json()["graph_id"]
-        yield graph_id
-    finally:
-        if os.path.exists(temp_file):
-            os.unlink(temp_file)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(data, f)
+            temp_file = f.name
+
+        try:
+            with open(temp_file, 'rb') as f:
+                response = client.post("/upload/", files={"file": f})
+
+            assert response.status_code == 201
+            graph_id = response.json()["graph_id"]
+            created_graphs.append(graph_id)
+            return graph_id
+
+        finally:
+            if os.path.exists(temp_file):
+                os.unlink(temp_file)
+
+    yield _upload_graph
+
+    # Clean up graph storage
+    graph_storage_path = Path(graph_storage_dir)
+    for graph_id in created_graphs:
+        graph_file = graph_storage_path / f"{graph_id}.json"
+        if os.path.exists(graph_file):
+            graph_file.unlink()
 
 
 @pytest.fixture(scope="function")
 def default_graph(client, uploaded_graph):
     """Set a graph as default and return the graph_id."""
-    graph_id = uploaded_graph
+    graph_id = uploaded_graph()
     response = client.post(f"/set-default/{graph_id}")
     assert response.status_code == 200
     yield graph_id
